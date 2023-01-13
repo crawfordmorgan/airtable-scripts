@@ -92,8 +92,13 @@ for (let record of query.records) {
         url += `&postal_code=${participantZip}`;
     }
 
-    let response = await remoteFetchAsync(url);
-    let apiResult = await response.json();
+let response = await remoteFetchAsync(url);
+if (response.status === 403) {
+    console.log("Error: 403 Forbidden. Check if the API Key is correct");
+    break;
+}
+let apiResult = await response.json();
+
     if(apiResult.error){
         let newUrl = url.replace(`&street=${participantStreetAddress}`, "");
         let newResponse = await remoteFetchAsync(newUrl);
