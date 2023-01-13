@@ -40,97 +40,102 @@ function getNestedValue(obj, path) {
     return current;
 }
 
-let geocodioApikey = 'XXXXX';
+let geocodioApikey = 'XXX';
 let table = base.getTable("Participants");
 let view = table.getView("Geocoding Pending");
 let query = await view.selectRecordsAsync();
 
-
 for (let record of query.records) {
-    let participantAddress = record.getCellValueAsString("Full Address String");
+    let participantStreetAddress = record.getCellValueAsString("Street Address");
     let participantCity = record.getCellValueAsString("City");
     let participantState = record.getCellValueAsString("State/Province");
     let participantZip = record.getCellValueAsString("Postal Code");
-
-    let url = `https://api.geocod.io/v1.7/geocode?q=${participantAddress}&api_key=${geocodioApikey}&fields=census2010`;
-
-let response = await remoteFetchAsync(url);
-let apiResult = await response.json();
-
-/**
- * This portion of the script is handling cases where the initial geocoding request
- * using the "Full Address String" field returns an error from the API. It then attempts
- * to geocode the record using the "City" and "State" fields, and if that fails, using the
- * "Postal Code" field. If all attempts fail, the script will log the error and move on to
- * the next record.
- */
-
-if (apiResult.error) {
-    if (apiResult.error === "Please add a payment method.") {
-        console.log("Error geocoding address:", apiResult.error);
-        console.log("Script stopped.");
-        break;
-    }
-    if (participantCity && participantState) {
-        url = `https://api.geocod.io/v1.7/geocode?q=${participantCity},${participantState}&api_key=${geocodioApikey}&fields=census2010`;
-        response = await remoteFetchAsync(url);
-        apiResult = await response.json();
-    } else if (participantZip) {
-        url = `https://api.geocod.io/v1.7/geocode?q=${participantZip}&api_key=${geocodioApikey}&fields=census2010`;
-        response = await remoteFetchAsync(url);
-        apiResult = await response.json();
-    } else {
-        console.log("Unable to geocode address:", participantAddress);
+    let participantCountry = record.getCellValueAsString("Country");
+    let participantAddress = "";
+    if (!participantStreetAddress && !participantCity && !participantState && !participantZip) {
+        console.log("Skipping record because all address fields are blank: ", participantAddress);
         continue;
     }
-}
+    if(participantCountry.toLowerCase() != "united states" && participantCountry.toLowerCase() != "us" && participantCountry != ""){
+        console.log("Skipping record because country is not United States or US: ", participantAddress);
+        continue;
+    }
+    if (participantStreetAddress) {
+        participantAddress += `${participantStreetAddress},`;
+    }
+    if (participantCity) {
+        participantAddress += `${participantCity},`;
+    }
+    if (participantState) {
+        participantAddress += `${participantState},`;
+    }
+    if (participantZip) {
+        participantAddress += `${participantZip},`;
+    }
+    if (participantCountry) {
+        participantAddress += `${participantCountry}`;
+    }
+    
+    let url = `https://api.geocod.io/v1.7/geocode?api_key=${geocodioApikey}&fields=census2010`;
 
-if (apiResult.error) {
+    if (participantStreetAddress) {
+        url += `&street=${participantStreetAddress}`;
+    }
+    if (participantCity) {
+        url += `&city=${participantCity}`;
+    }
+    if (participantState) {
+        url += `&state=${participantState}`;
+    }
+
+    let response = await remoteFetchAsync(url);
+    console.log(response);
+    let apiResult = await response.json();
+    console.log(apiResult);
+
+        /**
+         * This portion of the script is handling cases where the initial geocoding request
+         * using the City, State/Province, Postal Code, and Country fields returns an error from the API.
+         * If all attempts fail, the script will log the error and move on to the next record.
+         */
+        
+    let results = apiResult.results[0];
+    console.log(results);
+    
+    if (apiResult.error) {
     console.log("Error geocoding address:", apiResult.error);
     continue;
-}
-if (apiResult.response.status === "200 OK") {
-    let results = apiResult.results[0];
-} else if (apiResult.response.status === "422 Unprocessable Entities") {
-    console.log("Unable to geocode address:", participantAddress, apiResult.response.status);
-    continue;
-} else if (apiResult.response.status === "429 Too Many Requests") {
-    console.log("Too many requests, slow down and try again later:", participantAddress, apiResult.response.status);
-    continue;
-} else if (apiResult.response.status === "500 Server Error") {
-    console.log("Server error, please try again later:", participantAddress, apiResult.response.status);
-    continue;
-} else if (apiResult.response.status === "403 Forbidden") {
-    console.log("Invalid API key, please check your key:", participantAddress, apiResult.response.status);
-    continue;
-}
+    } else if (apiResult.results.length > 0) {
+    // do something with the results
+    } else {
+    console.log("No results found for address: ", participantAddress);
+    }
+    
+    let combined_statistical_area = getNestedValue(results, ['fields', 'census', '2010', 'combined_statistical_area', 'name']);
+    let source = getNestedValue(results, ['source']);
+    let city = getNestedValue(results, ['address_components', 'city']);
+    let state = getNestedValue(results, ['address_components', 'state']);
+    let country = getNestedValue(results, ['address_components', 'country']);
+    let zip = getNestedValue(results, ['address_components', 'zip']);
+    let formatted_address = getNestedValue(results, ['formatted_address']);
+    let lat = getNestedValue(results, ['location', 'lat']);
+    let lng = getNestedValue(results, ['location', 'lng']);
+    let accuracy = getNestedValue(results, ['accuracy']);
+    let msa_name = getNestedValue(results, ['fields', 'census', '2010', 'metro_micro_statistical_area', 'name']);
+    let msa_type = getNestedValue(results, ['fields', 'census', '2010', 'metro_micro_statistical_area', 'type']);
 
-let combined_statistical_area = getNestedValue(results, ['fields', 'census', '2010', 'combined_statistical_area', 'name']);
-
-let source = getNestedValue(results, ['source']);
-let city = getNestedValue(results, ['address_components', 'city']);
-let state = getNestedValue(results, ['address_components', 'state']);
-let country = getNestedValue(results, ['address_components', 'country']);
-let zip = getNestedValue(results, ['address_components', 'zip']);
-let formatted_address = getNestedValue(results, ['formatted_address']);
-let lat = getNestedValue(results, ['location', 'lat']);
-let lng = getNestedValue(results, ['location', 'lng']);
-let accuracy = getNestedValue(results, ['accuracy']);
-let msa_name = getNestedValue(results, ['fields', 'census', '2010', 'metro_micro_statistical_area', 'name']);
-let msa_type = getNestedValue(results, ['fields', 'census', '2010', 'metro_micro_statistical_area', 'type']);
-
-await table.updateRecordAsync(record, {
-"Geocodio - Source": source,
-"Geocodio - City": city,
-"Geocodio - State": state,
-"Geocodio - Country": country,
-"Geocodio - Zip": zip, 
-"Geocodio - Address String": formatted_address,
-"Geocodio - Lat": lat,
-"Geocodio - Long": lng,
-"Geocodio - Accuracy": accuracy,
-"Geocodio - MSA Name": msa_name,
-"Geocodio - MSA Type": msa_type,
-"Geocodio - CSA Name": combined_statistical_area,
-});
-}
+    await table.updateRecordAsync(record, {
+    "Geocodio - Source": source,
+    "Geocodio - City": city,
+    "Geocodio - State": state,
+    "Geocodio - Country": country,
+    "Geocodio - Zip": zip, 
+    "Geocodio - Address String": formatted_address,
+    "Geocodio - Lat": lat,
+    "Geocodio - Long": lng,
+    "Geocodio - Accuracy": accuracy,
+    "Geocodio - MSA Name": msa_name,
+    "Geocodio - MSA Type": msa_type,
+    "Geocodio - CSA Name": combined_statistical_area,
+    });
+}  
