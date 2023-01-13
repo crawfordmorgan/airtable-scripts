@@ -94,6 +94,25 @@ for (let record of query.records) {
 
     let response = await remoteFetchAsync(url);
     let apiResult = await response.json();
+    if(apiResult.error){
+        let newUrl = url.replace(`&street=${participantStreetAddress}`, "");
+        let newResponse = await remoteFetchAsync(newUrl);
+        let newApiResult = await newResponse.json();
+        if(newApiResult.error){
+            console.log("Error geocoding address:", apiResult.error);
+            continue;
+        }else{
+            apiResult = newApiResult;
+        }
+    }
+
+    if (apiResult.results.length > 0) {
+        let results = apiResult.results[0];
+        // do something with the results
+    } else {
+        console.log("No results found for address: ", participantAddress);
+    }
+
 
         /**
          * This portion of the script is handling cases where the initial geocoding request
@@ -102,7 +121,6 @@ for (let record of query.records) {
          */
         
     let results = apiResult.results[0];
-    console.log(results);
     
     if (apiResult.error) {
     console.log("Error geocoding address:", apiResult.error);
