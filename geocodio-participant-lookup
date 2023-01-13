@@ -4,10 +4,11 @@
 * It requires an API key from Geocod.io to function.
 *
 * The following Airtable fields are required to be present in the "Participants" table:
-* - "Full Address String"
+* - "Street Address"
 * - "City"
 * - "State/Province"
 * - "Postal Code"
+* - "Country"
 *
 * The script first retrieves all records from the "Participants" table, then for each record, it retrieves the geolocation data from Geocod.io by sending a request to the API with the "Full Address String" field as the address parameter.
 * It then extracts the relevant data from the Geocod.io API response and updates the Airtable record with the following fields, which must also exist and be blank:
