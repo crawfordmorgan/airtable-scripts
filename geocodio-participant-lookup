@@ -88,11 +88,12 @@ for (let record of query.records) {
     if (participantState) {
         url += `&state=${participantState}`;
     }
+    if (participantZip) {
+        url += `&postal_code=${participantZip}`;
+    }
 
     let response = await remoteFetchAsync(url);
-    console.log(response);
     let apiResult = await response.json();
-    console.log(apiResult);
 
         /**
          * This portion of the script is handling cases where the initial geocoding request
