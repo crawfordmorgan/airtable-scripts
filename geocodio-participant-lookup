@@ -1,0 +1,115 @@
+btw I made you a late hanukkah present.
+
+/**
+* This script is used to determine whether event participants live in urban or rural areas by using the Geocod.io API.
+*
+* It requires an API key from Geocod.io to function.
+*
+* The following Airtable fields are required to be present in the "Participants" table:
+* - "Full Address String"
+* - "City"
+* - "State/Province"
+* - "Postal Code"
+*
+* The script first retrieves all records from the "Participants" table, then for each record, it retrieves the geolocation data from Geocod.io by sending a request to the API with the "Full Address String" field as the address parameter.
+* It then extracts the relevant data from the Geocod.io API response and updates the Airtable record with the following fields, which must also exist and be blank:
+* - "Geocodio - Source"
+* - "Geocodio - City"
+* - "Geocodio - State"
+* - "Geocodio - Country"
+* - "Geocodio - Zip"
+* - "Geocodio - Address String"
+* - "Geocodio - Lat"
+* - "Geocodio - Long"
+* - "Geocodio - Accuracy"
+* - "Geocodio - MSA Name"
+* - "Geocodio - MSA Type"
+* - "Geocodio - CSA Name"
+*
+* By reviewing a record's Metropolitan Statistical Area (MSA) and/or Combined Statistical Area (CSA), you can determine whether they live in an urban or rural area.
+*
+*/
+
+function getNestedValue(obj, path) {
+    let current = obj;
+    path.forEach(key => {
+        if (current && current.hasOwnProperty(key)) {
+            current = current[key];
+        } else {
+            current = null;
+        }
+    });
+    return current;
+}
+
+let geocodioApikey = 'XXXXX';
+let table = base.getTable("Participants");
+let view = table.getView("Geocoding Pending");
+let query = await view.selectRecordsAsync();
+
+
+for (let record of query.records) {
+    let participantAddress = record.getCellValueAsString("Full Address String");
+    let participantCity = record.getCellValueAsString("City");
+    let participantState = record.getCellValueAsString("State/Province");
+    let participantZip = record.getCellValueAsString("Postal Code");
+
+    let url = `https://api.geocod.io/v1.7/geocode?q=${participantAddress}&api_key=${geocodioApikey}&fields=census2010`;
+
+let response = await remoteFetchAsync(url);
+let apiResult = await response.json();
+
+/**
+ * This portion of the script is handling cases where the initial geocoding request
+ * using the "Full Address String" field returns an error from the API. It then attempts
+ * to geocode the record using the "City" and "State" fields, and if that fails, using the
+ * "Postal Code" field. If all attempts fail, the script will log the error and move on to
+ * the next record.
+ */
+
+if (apiResult.error) {
+    if (participantCity && participantState) {
+        url = `https://api.geocod.io/v1.7/geocode?q=${participantCity},${participantState}&api_key=${geocodioApikey}&fields=census2010`;
+        response = await remoteFetchAsync(url);
+        apiResult = await response.json();
+    } else if (participantZip) {
+        url = `https://api.geocod.io/v1.7/geocode?q=${participantZip}&api_key=${geocodioApikey}&fields=census2010`;
+        response = await remoteFetchAsync(url);
+        apiResult = await response.json();
+    } else {
+        console.log("Unable to geocode address:", participantAddress);
+        continue;
+    }
+}
+
+let results = apiResult.results[0];
+
+let combined_statistical_area = getNestedValue(results, ['fields', 'census', '2010', 'combined_statistical_area', 'name']);
+
+let source = getNestedValue(results, ['source']);
+let city = getNestedValue(results, ['address_components', 'city']);
+let state = getNestedValue(results, ['address_components', 'state']);
+let country = getNestedValue(results, ['address_components', 'country']);
+let zip = getNestedValue(results, ['address_components', 'zip']);
+let formatted_address = getNestedValue(results, ['formatted_address']);
+let lat = getNestedValue(results, ['location', 'lat']);
+let lng = getNestedValue(results, ['location', 'lng']);
+let accuracy = getNestedValue(results, ['accuracy']);
+let msa_name = getNestedValue(results, ['fields', 'census', '2010', 'metro_micro_statistical_area', 'name']);
+let msa_type = getNestedValue(results, ['fields', 'census', '2010', 'metro_micro_statistical_area', 'type']);
+
+await table.updateRecordAsync(record, {
+"Geocodio - Source": source,
+"Geocodio - City": city,
+"Geocodio - State": state,
+"Geocodio - Country": country,
+"Geocodio - Zip": zip, 
+"Geocodio - Address String": formatted_address,
+"Geocodio - Lat": lat,
+"Geocodio - Long": lng,
+"Geocodio - Accuracy": accuracy,
+"Geocodio - MSA Name": msa_name,
+"Geocodio - MSA Type": msa_type,
+"Geocodio - CSA Name": combined_statistical_area,
+});
+}
