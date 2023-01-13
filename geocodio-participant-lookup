@@ -68,6 +68,11 @@ let apiResult = await response.json();
  */
 
 if (apiResult.error) {
+    if (apiResult.error === "Please add a payment method.") {
+        console.log("Error geocoding address:", apiResult.error);
+        console.log("Script stopped.");
+        break;
+    }
     if (participantCity && participantState) {
         url = `https://api.geocod.io/v1.7/geocode?q=${participantCity},${participantState}&api_key=${geocodioApikey}&fields=census2010`;
         response = await remoteFetchAsync(url);
@@ -82,7 +87,25 @@ if (apiResult.error) {
     }
 }
 
-let results = apiResult.results[0];
+if (apiResult.error) {
+    console.log("Error geocoding address:", apiResult.error);
+    continue;
+}
+if (apiResult.response.status === "200 OK") {
+    let results = apiResult.results[0];
+} else if (apiResult.response.status === "422 Unprocessable Entities") {
+    console.log("Unable to geocode address:", participantAddress, apiResult.response.status);
+    continue;
+} else if (apiResult.response.status === "429 Too Many Requests") {
+    console.log("Too many requests, slow down and try again later:", participantAddress, apiResult.response.status);
+    continue;
+} else if (apiResult.response.status === "500 Server Error") {
+    console.log("Server error, please try again later:", participantAddress, apiResult.response.status);
+    continue;
+} else if (apiResult.response.status === "403 Forbidden") {
+    console.log("Invalid API key, please check your key:", participantAddress, apiResult.response.status);
+    continue;
+}
 
 let combined_statistical_area = getNestedValue(results, ['fields', 'census', '2010', 'combined_statistical_area', 'name']);
 
