@@ -1,0 +1,49 @@
+const table = base.getTable("Client Contacts");
+const view = table.getView("Grid view");
+const queryResult = await view.selectRecordsAsync();
+
+const recordsByEmail = {};
+
+for (const record of queryResult.records) {
+  const email = record.getCellValueAsString("Email");
+  if (email in recordsByEmail) {
+    const matchedRecord = recordsByEmail[email];
+    
+    // Concatenate employer IDs
+    const matchedEmployerIds = (matchedRecord.getCellValue("Employer/Organization") || []).map((r) => r.id);
+    const deletedEmployerIds = (record.getCellValue("Employer/Organization") || []).map((r) => r.id);
+    const employerIds = [...new Set([...matchedEmployerIds, ...deletedEmployerIds])].filter(Boolean).map((id) => ({ id }));
+
+    // Concatenate invoicing contact IDs
+    const matchedInvoicingContactIds = (matchedRecord.getCellValue("Invoicing Contact For") || []).map((r) => r.id);
+    const deletedInvoicingContactIds = (record.getCellValue("Invoicing Contact For") || []).map((r) => r.id);
+    const invoicingContactIds = [...new Set([...matchedInvoicingContactIds, ...deletedInvoicingContactIds])].filter(Boolean).map((id) => ({ id }));
+
+    // Concatenate project contact IDs
+    const matchedProjectContactIds = (matchedRecord.getCellValue("Project Contact For") || []).map((r) => r.id);
+    const deletedProjectContactIds = (record.getCellValue("Project Contact For") || []).map((r) => r.id);
+    const projectContactIds = [...new Set([...matchedProjectContactIds, ...deletedProjectContactIds])].filter(Boolean).map((id) => ({ id }));
+
+    // Concatenate contract signer IDs
+    const matchedContractSignerIds = (matchedRecord.getCellValue("Contract Signer For") || []).map((r) => r.id);
+    const deletedContractSignerIds = (record.getCellValue("Contract Signer For") || []).map((r) => r.id);
+    const contractSignerIds = [...new Set([...matchedContractSignerIds, ...deletedContractSignerIds])].filter(Boolean).map((id) => ({ id }));
+
+
+
+    // Update matched record with concatenated values
+    await table.updateRecordAsync(matchedRecord, {
+      "Employer/Organization": employerIds,
+      "Invoicing Contact For": invoicingContactIds,
+      "Project Contact For": projectContactIds,
+      "Contract Signer For": contractSignerIds,
+      "Name": record.getCellValueAsString("Name"),
+      "Phone": record.getCellValueAsString("Phone") || matchedRecord.getCellValueAsString("Phone")
+    });
+
+    // Delete input record
+    await table.deleteRecordAsync(record.id);
+  } else {
+    recordsByEmail[email] = record;
+  }
+}
